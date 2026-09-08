@@ -1,0 +1,52 @@
+name: Deploy demo to GitHub Pages
+
+# main에 푸시될 때마다 배포한다. 수동 실행도 열어둔다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# actions/deploy-pages가 요구하는 최소 권한. 그 이상 주지 않는다.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포가 겹치면 나중 것만 살린다. cancel-in-progress를 켜지 않는 이유는
+# 배포 중간에 끊긴 Pages가 깨진 상태로 남을 수 있어서다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 과제 조건이 "Node 20 이상"이므로 CI도 20으로 돌린다.
+      # 최신 Node에서만 통과하는 코드가 섞이는 것을 막는 역할도 한다.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # package.json의 build는 `tsc --noEmit && vite build`다.
+      # 타입 검사가 배포 게이트에 그대로 들어간다.
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,49 @@
+{
+  "folders": [
+    {
+      "name": "EffectModuleDemo",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.tabSize": 2,
+    "editor.rulers": [100],
+    "files.eol": "\n",
+    "files.encoding": "utf8",
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/dist": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/package-lock.json": true
+    },
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "dev",
+        "type": "shell",
+        "command": "npm run dev",
+        "problemMatcher": [],
+        "group": { "kind": "build", "isDefault": true }
+      },
+      {
+        "label": "typecheck",
+        "type": "shell",
+        "command": "npm run typecheck",
+        "problemMatcher": ["$tsc"]
+      },
+      {
+        "label": "build",
+        "type": "shell",
+        "command": "npm run build",
+        "problemMatcher": ["$tsc"]
+      }
+    ]
+  }
+}

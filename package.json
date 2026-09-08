@@ -1,0 +1,25 @@
+{
+  "name": "effect-module-demo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Reusable Three.js impact-burst effect module with a two-scene harness and a load benchmark",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "bench:cpu": "vite build --ssr src/bench/cpuBench.ts --outDir node_modules/.bench --logLevel warn && node node_modules/.bench/cpuBench.js"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "typescript": "~5.9.3",
+    "vite": "^6.4.3"
+  }
+}

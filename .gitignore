@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+
+# 에디터/도구 로컬 설정. 저장소에 들어갈 이유가 없다.
+.claude/
+
+# 문서 윤문 도구의 중간 산출물(초안·메트릭·diff). 산출물이 아니라 작업 부산물이다.
+_workspace/

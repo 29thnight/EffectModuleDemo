@@ -1,0 +1,8 @@
+# 줄바꿈을 저장소에서 LF로 통일한다.
+# CI(ubuntu)와 Windows 작업 환경이 섞여 있어, 이게 없으면 클론하는 사람마다
+# 전체 파일이 수정된 것처럼 보이는 diff가 난다.
+* text=auto eol=lf
+
+# 바이너리로 취급할 것 (현재는 없지만 향후 대비)
+*.png binary
+*.jpg binary

@@ -1,0 +1,141 @@
+/*
+ * 디버그 패널 스타일.
+ * 디자인은 평가 대상이 아니므로 읽기 쉬운 최소한만 한다.
+ * 다만 "숫자가 흔들려도 레이아웃이 흔들리지 않는 것"에는 신경 썼다 —
+ * 값이 바뀔 때마다 폭이 변하면 읽는 사람이 계속 눈을 다시 맞춰야 한다.
+ */
+
+.dbg {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 340px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(14, 16, 22, 0.9);
+  color: #dfe4ec;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+  z-index: 10;
+}
+
+.dbg h1 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+}
+
+.dbg section {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dbg section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.dbg h2 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8f9bb0;
+  font-weight: 600;
+}
+
+.dbg label {
+  display: block;
+  margin-bottom: 5px;
+  cursor: pointer;
+}
+
+.dbg input[type='range'] {
+  width: 100%;
+  margin: 4px 0;
+}
+
+.dbg select,
+.dbg button {
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.dbg select {
+  width: 100%;
+}
+
+.dbg button {
+  cursor: pointer;
+  margin: 0 4px 4px 0;
+}
+
+.dbg button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.dbg button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dbg-stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  margin: 0;
+}
+
+.dbg-stats dt {
+  color: #8f9bb0;
+}
+
+.dbg-stats dd {
+  margin: 0;
+  text-align: right;
+  /* 숫자가 흔들려도 열 너비가 고정되도록 tabular numerals를 쓴다. */
+  font-variant-numeric: tabular-nums;
+}
+
+.dbg-stats dd.warn {
+  color: #ffb454;
+}
+
+.dbg-log {
+  max-height: 96px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #b9c3d4;
+}
+
+.dbg-report {
+  width: 100%;
+  height: 140px;
+  resize: vertical;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #dfe4ec;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  padding: 6px;
+  white-space: pre;
+}
+
+.dbg-note {
+  color: #7d879a;
+  margin: 4px 0 0;
+}
