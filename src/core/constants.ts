@@ -23,9 +23,18 @@ export const MAX_DT_SECONDS = 0.1
 /**
  * 한 프레임에서 허용하는 최대 버스트 수.
  * dt 클램프 상한(0.1s) x 최대 부하의 초당 버스트 수를 넘지 않게 잡은 여유값이다.
+ *
+ *   최대 부하 2,048,000 / (수명 0.9s x 버스트당 24개) = 94,815 bursts/s
+ *   94,815 x 0.1s(dt 상한) = 9,482 -> 여유를 두어 16,384
+ *
+ * 이 한도가 부하 상한과 같이 움직여야 하는 이유는 과부하 테스트의 성격 때문이다.
+ * 부하가 걸리면 프레임이 길어지고, 프레임이 길어지면 프레임당 버스트 수가 오른다.
+ * 상한을 안 올리면 정작 측정하려는 저프레임 구간에서만 발사가 잘려 목표 N에 도달하지 못하고,
+ * "부하를 못 걸어서 빨랐다"가 "빨라서 부하를 못 걸었다"로 잘못 읽힌다.
+ *
  * 이 한도에 걸리면 밀린 발사 빚은 탕감한다. 빚을 이월하면 다음 프레임이 더 밀리는 악순환이 된다.
  */
-export const MAX_BURSTS_PER_FRAME = 256
+export const MAX_BURSTS_PER_FRAME = 16_384
 
 /** 카메라 공통 파라미터. 두 씬이 같은 값을 쓰는 편이 씬 간 성능 비교를 공정하게 만든다. */
 export const CAMERA_FOV_DEG = 60
@@ -51,8 +60,8 @@ export const DT_SPIKE_LOG_THRESHOLD_SECONDS = MAX_DT_SECONDS * 5
 /** 절두체 밖 발생 검증: 카메라 뒤쪽 이 거리에 버스트를 만든다. */
 export const BEHIND_CAMERA_DISTANCE = 40
 
-/** 풀 고갈 검증에서 강제로 올리는 동시 파티클 목표치. capacity를 확실히 넘겨야 한다. */
-export const POOL_EXHAUST_TARGET = 120_000
+/** 풀 고갈 검증에서 강제로 올리는 동시 파티클 목표치. capacity(5,120,000)를 확실히 넘겨야 한다. */
+export const POOL_EXHAUST_TARGET = 10_240_000
 
 /**
  * UI 갱신 주기(초). 4Hz.

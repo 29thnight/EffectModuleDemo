@@ -1,4 +1,4 @@
-import { VSYNC_CPU_HEADROOM_RATIO, VSYNC_FLATNESS_RATIO } from './constants'
+import { TARGET_REACHED_RATIO, VSYNC_CPU_HEADROOM_RATIO, VSYNC_FLATNESS_RATIO } from './constants'
 import type { SweepReport, SweepStepResult } from './LoadSweep'
 
 /**
@@ -97,7 +97,19 @@ function diagnose(report: SweepReport): string {
 }
 
 function pickBottleneck(last: SweepStepResult, gpuGap: number, effectShare: number): string {
-  // vsync 고정을 먼저 걸러낸다.
+  // 목표 미달을 가장 먼저 걸러낸다. 여기에 걸리면 아래 판정은 전부 무의미하다 —
+  // 재려던 부하가 애초에 걸리지 않았으므로 병목을 논할 대상 자체가 없다.
+  if (last.aliveAvg < last.targetConcurrent * TARGET_REACHED_RATIO) {
+    const reached = last.targetConcurrent > 0 ? (last.aliveAvg / last.targetConcurrent) * 100 : 0
+    return (
+      `목표 미달(${INT(last.aliveAvg)} / ${INT(last.targetConcurrent)}, ${reached.toFixed(0)}%). ` +
+      '프레임이 dt 클램프보다 길어져 정상 상태에 도달하기 전에 측정이 끝났다. ' +
+      '이 행의 프레임 타임은 목표 N이 아니라 실측 생존 수의 성능이므로 다른 단계와 비교할 수 없다. ' +
+      '직전 단계까지를 유효 구간으로 읽어야 한다.'
+    )
+  }
+
+  // vsync 고정을 그다음에 걸러낸다.
   // 프레임 타임이 주사율에 딱 붙어 흔들리지 않는데 CPU가 그 안에 넉넉히 들어간다면,
   // GPU가 포화된 것이 아니라 화면을 기다리는 중이다. 즉 아직 한계를 못 찾은 것이지
   // "GPU 병목"이 아니다. 이 둘을 뭉뚱그리면 "60fps 나왔으니 됐다"고 잘못 읽게 된다.
