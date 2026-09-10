@@ -1,7 +1,7 @@
 import type { FrameTelemetry, ProbeKind, SceneId } from '../core/types'
 import type { OverflowPolicy } from '../effects/types'
 
-import { button, checkbox, el, radio, select } from './dom'
+import { button, checkbox, type CheckboxParts, el, radio, select } from './dom'
 import './panel.css'
 
 /**
@@ -20,8 +20,10 @@ export interface DebugPanelOptions {
   readonly initialLoadIndex: number
   readonly pixelRatioOptions: readonly (number | null)[]
   readonly initialOverflow: OverflowPolicy
+  readonly initialAutoEmission: boolean
   readonly onSceneChange: (id: SceneId) => void
   readonly onLoadChange: (target: number) => void
+  readonly onAutoEmissionChange: (enabled: boolean) => void
   readonly onOverflowChange: (policy: OverflowPolicy) => void
   readonly onPixelRatioChange: (value: number | null) => void
   readonly onEmitBehindCameraChange: (enabled: boolean) => void
@@ -37,7 +39,8 @@ const STAT_ROWS: readonly (readonly [string, string])[] = [
   ['alive', '생존 / 목표 N'],
   ['drawn', 'draw 슬롯 / 용량'],
   ['calls', '드로우콜 이펙트 / 전체'],
-  ['rate', 'bursts / s'],
+  ['rate', 'bursts / s (자동)'],
+  ['clicks', '클릭 발사 누적'],
   ['pool', '드롭 / 재활용'],
   ['dpr', 'DPR'],
   ['dt', 'dt 관측최대 raw → clamp'],
@@ -54,11 +57,18 @@ export class DebugPanel {
   private readonly values = new Map<string, HTMLElement>()
   private readonly loadLabel: HTMLElement
   private readonly slider: HTMLInputElement
+  private readonly autoEmission: CheckboxParts
   private readonly sweepButton: HTMLButtonElement
   private readonly progress: HTMLElement
   private readonly logBox: HTMLElement
   private readonly report: HTMLTextAreaElement
   private readonly logLines: string[] = []
+  /**
+   * 스윕 중 잠그는 컨트롤. 씬·오버플로·DPR·프로브는 측정 전제(SweepContext)를 바꾸거나
+   * 샘플러를 리셋하므로, 스윕 도중 건드리면 표의 일부 행이 다른 조건에서 잰 값이 된다.
+   * 그 표는 겉보기에 멀쩡해서 잘못 잰 줄도 모른다. 애초에 못 건드리게 하는 편이 낫다.
+   */
+  private readonly sweepLocked: (HTMLInputElement | HTMLSelectElement | HTMLButtonElement)[] = []
 
   constructor(
     private readonly host: HTMLElement,
@@ -66,6 +76,11 @@ export class DebugPanel {
   ) {
     this.loadLabel = el('div')
     this.slider = this.createSlider()
+    this.autoEmission = checkbox(
+      '자동 발사 (부하 생성기)',
+      options.initialAutoEmission,
+      options.onAutoEmissionChange,
+    )
     this.sweepButton = button('부하 스윕 실행', options.onRunSweep)
     this.progress = el('p', { class: 'dbg-note' }, ['대기 중'])
     this.logBox = el('pre', { class: 'dbg-log' })
@@ -99,6 +114,7 @@ export class DebugPanel {
     this.setStat('drawn', `${int(t.drawnSlots)} / ${int(t.capacity)}`)
     this.setStat('calls', `${t.effectDrawCalls} / ${t.totalDrawCalls}`, t.effectDrawCalls > 1)
     this.setStat('rate', t.burstsPerSecond.toFixed(1))
+    this.setStat('clicks', int(t.clickBursts))
     this.setStat(
       'pool',
       `${int(t.burstsDropped)} / ${int(t.particlesRecycled)}`,
@@ -116,6 +132,9 @@ export class DebugPanel {
     // bursts/s도 하네스가 씬의 선언된 수명에서 역산하므로 씬 전환 때 같이 바뀐다.
     this.updateLoadLabel(t.targetConcurrent, t.burstsPerSecond)
     this.syncSliderToTarget(t.targetConcurrent)
+    // 스윕이 자동 발사를 강제로 켰다 껐다 하므로 체크 표시도 하네스의 실제 상태를 따른다.
+    const auto = this.autoEmission.input
+    if (auto.checked !== t.autoEmission) auto.checked = t.autoEmission
   }
 
   log(message: string): void {
@@ -135,6 +154,8 @@ export class DebugPanel {
   setSweepBusy(busy: boolean): void {
     this.sweepButton.disabled = busy
     this.slider.disabled = busy
+    this.autoEmission.input.disabled = busy
+    for (const control of this.sweepLocked) control.disabled = busy
   }
 
   setSweepProgress(message: string): void {
@@ -157,7 +178,8 @@ export class DebugPanel {
         this.options.onSceneChange(value as SceneId),
       ),
     )
-    return el('section', {}, [el('h2', {}, ['씬']), ...rows])
+    this.sweepLocked.push(...rows.map((row) => row.input))
+    return el('section', {}, [el('h2', {}, ['씬']), ...rows.map((row) => row.root)])
   }
 
   private createSlider(): HTMLInputElement {
@@ -177,10 +199,14 @@ export class DebugPanel {
 
   private buildLoadSection(): HTMLElement {
     return el('section', {}, [
-      el('h2', {}, ['부하 (동시 생존 파티클 N)']),
+      el('h2', {}, ['발사']),
+      el('p', { class: 'dbg-note' }, ['캔버스를 클릭하면 맞은 지점·법선에서 터집니다.']),
+      this.autoEmission.root,
       this.loadLabel,
       this.slider,
-      el('p', { class: 'dbg-note' }, ['bursts/s = N / (수명 L × 버스트당 P)']),
+      el('p', { class: 'dbg-note' }, [
+        '자동 발사의 동시 생존 파티클 N. bursts/s = N / (수명 L × 버스트당 P)',
+      ]),
     ])
   }
 
@@ -202,6 +228,7 @@ export class DebugPanel {
       'auto',
       (value) => this.options.onPixelRatioChange(value === 'auto' ? null : Number(value)),
     )
+    this.sweepLocked.push(overflow, dpr)
 
     return el('section', {}, [
       el('h2', {}, ['이펙트 옵션']),
@@ -222,14 +249,19 @@ export class DebugPanel {
   }
 
   private buildProbeSection(): HTMLElement {
-    return el('section', {}, [
-      el('h2', {}, ['비정상 상황 검증']),
+    const probes = [
       button('dt 폭주 주입', () => this.options.onProbe('dt-spike')),
       button('dispose 후 호출', () => this.options.onProbe('dispose-then-call')),
       button('풀 고갈', () => this.options.onProbe('pool-exhaust')),
       button('부하·관측 리셋', () => this.options.onProbe('reset-load')),
-      checkbox('절두체 밖에서 발사', false, this.options.onEmitBehindCameraChange),
-    ])
+    ]
+    const behindCamera = checkbox(
+      '절두체 밖에서 발사 (자동 발사만)',
+      false,
+      this.options.onEmitBehindCameraChange,
+    )
+    this.sweepLocked.push(...probes, behindCamera.input)
+    return el('section', {}, [el('h2', {}, ['비정상 상황 검증']), ...probes, behindCamera.root])
   }
 
   private buildSweepSection(): HTMLElement {
@@ -313,6 +345,7 @@ function describeState(t: FrameTelemetry): string {
   const flags: string[] = []
   if (t.effectDisposed) flags.push('disposed')
   if (t.emitBehindCamera) flags.push('절두체 밖')
+  flags.push(t.autoEmission ? '자동 발사' : '클릭 발사만')
   flags.push(t.overflow === 'recycle-oldest' ? '재활용' : '드롭')
   return flags.join(' · ')
 }

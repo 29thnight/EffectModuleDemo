@@ -2,13 +2,11 @@ import type { SamplerSnapshot } from '../bench/FrameSampler'
 import type { EffectStats, OverflowPolicy } from '../effects/types'
 
 import { MAX_DT_SECONDS } from './constants'
-import type { FrameTelemetry, SceneId } from './types'
+import type { FrameTelemetry } from './types'
 
 type MutableTelemetry = { -readonly [K in keyof FrameTelemetry]: FrameTelemetry[K] }
 
 export interface TelemetryInputs {
-  readonly sceneId: SceneId
-  readonly sceneLabel: string
   readonly snapshot: SamplerSnapshot
   readonly stats: EffectStats
   readonly targetConcurrent: number
@@ -18,6 +16,8 @@ export interface TelemetryInputs {
   readonly pixelRatio: number
   readonly peakRawDtSeconds: number
   readonly emitBehindCamera: boolean
+  readonly autoEmission: boolean
+  readonly clickBursts: number
 }
 
 /**
@@ -33,10 +33,8 @@ export interface TelemetryInputs {
 export class TelemetryRecorder {
   private readonly record: MutableTelemetry
 
-  constructor(sceneId: SceneId, sceneLabel: string, capacity: number, overflow: OverflowPolicy) {
+  constructor(capacity: number, overflow: OverflowPolicy) {
     this.record = {
-      sceneId,
-      sceneLabel,
       frameAvgMs: 0,
       frameP95Ms: 0,
       fps: 0,
@@ -59,6 +57,8 @@ export class TelemetryRecorder {
       maxClampedDtMs: 0,
       effectDisposed: false,
       emitBehindCamera: false,
+      autoEmission: false,
+      clickBursts: 0,
     }
   }
 
@@ -66,8 +66,6 @@ export class TelemetryRecorder {
     const r = this.record
     const { snapshot, stats } = inputs
 
-    r.sceneId = inputs.sceneId
-    r.sceneLabel = inputs.sceneLabel
     r.frameAvgMs = snapshot.frameAvgMs
     r.frameP95Ms = snapshot.frameP95Ms
     r.fps = snapshot.fps
@@ -90,6 +88,8 @@ export class TelemetryRecorder {
     r.maxRawDtMs = inputs.peakRawDtSeconds * 1000
     r.maxClampedDtMs = Math.min(inputs.peakRawDtSeconds, MAX_DT_SECONDS) * 1000
     r.emitBehindCamera = inputs.emitBehindCamera
+    r.autoEmission = inputs.autoEmission
+    r.clickBursts = inputs.clickBursts
 
     return r
   }

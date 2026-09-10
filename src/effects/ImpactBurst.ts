@@ -57,6 +57,8 @@ type MutableStats = { -readonly [K in keyof EffectStats]: EffectStats[K] }
  * 감쇠는 (1 - drag*dt) 근사가 아니라 exp(-drag*dt)를 쓴다. dt가 클램프 상한(0.1s)까지
  * 튀어도 속도가 음수로 뒤집히지 않는다.
  */
+const noopRaycast = (): void => {}
+
 export class ImpactBurst implements EffectModule {
   /** 씬에 노출되는 유일한 3D 객체. 타입이 Points가 아니라 Object3D인 것이 요점이다. */
   readonly object3D: Object3D
@@ -92,6 +94,10 @@ export class ImpactBurst implements EffectModule {
     // 파티클 좌표는 월드 좌표다. 매 프레임 바운딩 스피어를 다시 구하는 비용(O(capacity))보다
     // 절두체 컬링을 끄는 편이 싸다. 화면 밖 파티클은 정점 셰이더에서만 비용을 낸다.
     this.points.frustumCulled = false
+    // 파티클은 피킹 대상이 아니다. Points의 기본 raycast는 정점 전부를 순회하므로(O(capacity))
+    // 하네스가 클릭 지점을 찾으려고 씬 그래프를 훑을 때 이 객체 하나가 5,120,000회 검사를 만든다.
+    // 씬이 이펙트 루트를 골라내게 하지 않고 모듈이 스스로 빠지는 것이 소유권 규칙에도 맞는다.
+    this.points.raycast = noopRaycast
     this.points.matrixAutoUpdate = false
     this.points.updateMatrix()
     this.object3D = this.points

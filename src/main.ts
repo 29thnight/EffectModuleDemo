@@ -1,7 +1,7 @@
 import { DEFAULT_LOAD_INDEX, LOAD_STEPS, SWEEP_RESTORE_INDEX } from './bench/constants'
 import { formatSweepReport } from './bench/report'
 import { App } from './core/App'
-import { PIXEL_RATIO_OPTIONS } from './core/constants'
+import { DEFAULT_AUTO_EMISSION, PIXEL_RATIO_OPTIONS } from './core/constants'
 import { DEFAULT_EFFECT_CONFIG } from './effects/constants'
 import { DebugPanel } from './ui/DebugPanel'
 
@@ -30,8 +30,10 @@ panel = new DebugPanel(document.body, {
   initialLoadIndex: DEFAULT_LOAD_INDEX,
   pixelRatioOptions: PIXEL_RATIO_OPTIONS,
   initialOverflow: DEFAULT_EFFECT_CONFIG.overflow,
+  initialAutoEmission: DEFAULT_AUTO_EMISSION,
   onSceneChange: (id) => app.setScene(id),
   onLoadChange: (target) => app.setConcurrentTarget(target),
+  onAutoEmissionChange: (enabled) => app.setAutoEmission(enabled),
   onOverflowChange: (policy) => app.setOverflowPolicy(policy),
   onPixelRatioChange: (value) => app.setPixelRatioOverride(value),
   onEmitBehindCameraChange: (enabled) => app.setEmitBehindCamera(enabled),
@@ -43,7 +45,7 @@ panel = new DebugPanel(document.body, {
 
 app.setConcurrentTarget(LOAD_STEPS[DEFAULT_LOAD_INDEX])
 app.start()
-panel.log('준비 완료. 씬을 전환해도 이펙트 인스턴스는 그대로 유지됩니다.')
+panel.log('준비 완료. 캔버스를 클릭하면 맞은 지점에서 터집니다. 부하 측정은 「자동 발사」를 켜세요.')
 
 async function runSweep(): Promise<void> {
   const activePanel = panel

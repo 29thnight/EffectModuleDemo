@@ -35,6 +35,11 @@ export interface SweepStepResult {
   readonly effectP95Ms: number
   readonly burstsDropped: number
   readonly particlesRecycled: number
+  /**
+   * 측정 구간에 실제로 잰 프레임 수. 이 값이 작으면(탭이 가려져 rAF가 멈춘 경우 등)
+   * 같은 행의 평균·p95는 통계라 부를 수 없다. 표에 그대로 남겨 독자가 걸러내게 한다.
+   */
+  readonly sampleCount: number
 }
 
 export interface SweepReport {
@@ -79,7 +84,10 @@ export class LoadSweep {
 
   private steps: SweepStepResult[] = []
   private startedAt = ''
-  private settle: ((report: SweepReport) => void) | null = null
+  private settle: {
+    readonly resolve: (report: SweepReport) => void
+    readonly reject: (reason: Error) => void
+  } | null = null
 
   constructor(private readonly host: SweepHost) {}
 
@@ -96,8 +104,8 @@ export class LoadSweep {
     this.startedAt = new Date().toISOString()
     this.enterStep(0)
 
-    return new Promise<SweepReport>((resolve) => {
-      this.settle = resolve
+    return new Promise<SweepReport>((resolve, reject) => {
+      this.settle = { resolve, reject }
     })
   }
 
@@ -121,11 +129,18 @@ export class LoadSweep {
     if (this.elapsed >= MEASURE_SECONDS) this.finishStep(live)
   }
 
+  /**
+   * 하네스가 폐기되거나 측정 전제가 깨졌을 때 부른다.
+   * 부분 결과를 resolve하지 않고 reject한다. 절반짜리 표를 "완료"로 돌려주면
+   * 호출자는 그것이 전체 스윕인지 알 수 없고, 그 표가 README에 붙는 순간 거짓 데이터가 된다.
+   */
   cancel(): void {
     if (this.phase === 'idle') return
     this.phase = 'idle'
     this.host.onProgress('스윕 취소됨')
-    this.settleWith()
+    const settle = this.settle
+    this.settle = null
+    settle?.reject(new Error(`스윕이 ${this.steps.length}단계에서 취소되었습니다.`))
   }
 
   // -- 내부 -------------------------------------------------------------------
@@ -175,6 +190,7 @@ export class LoadSweep {
       effectP95Ms: snapshot.effectP95Ms,
       burstsDropped: live.burstsDropped - this.droppedBaseline,
       particlesRecycled: live.particlesRecycled - this.recycledBaseline,
+      sampleCount: snapshot.sampleCount,
     })
 
     this.stepIndex++
@@ -188,10 +204,10 @@ export class LoadSweep {
   }
 
   private settleWith(): void {
-    const resolve = this.settle
+    const settle = this.settle
     this.settle = null
-    if (!resolve) return
-    resolve({
+    if (!settle) return
+    settle.resolve({
       startedAt: this.startedAt,
       context: this.host.describe(),
       warmupSeconds: WARMUP_SECONDS,

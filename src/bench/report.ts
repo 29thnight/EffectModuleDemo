@@ -26,6 +26,7 @@ const COLUMNS: readonly string[] = [
   '이펙트 CPU p95',
   '드롭',
   '재활용',
+  '프레임 수',
 ]
 
 export function formatSweepReport(report: SweepReport): string {
@@ -65,6 +66,7 @@ function formatTable(steps: readonly SweepStepResult[]): string {
       MS(step.effectP95Ms),
       INT(step.burstsDropped),
       INT(step.particlesRecycled),
+      INT(step.sampleCount),
     ].join(' | '),
   )
 

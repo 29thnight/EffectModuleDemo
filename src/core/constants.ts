@@ -69,3 +69,21 @@ export const POOL_EXHAUST_TARGET = 10_240_000
  * 계기가 측정 대상을 바꾸면 안 된다.
  */
 export const UI_REFRESH_SECONDS = 0.25
+
+/**
+ * 시작 시 자동 발사(부하 생성기)를 끈 채로 둔다.
+ *
+ * 이 데모의 첫 화면은 "클릭한 곳에서 터진다"여야 한다. 자동 발사가 켜진 채면
+ * 초당 92회 버스트 속에서 클릭 1회분(24개)은 구분이 안 되고, 인터랙티브 이펙트라는
+ * 과제의 전제가 화면에서 증명되지 않는다. 부하 측정은 패널에서 켜거나 스윕이 알아서 켠다.
+ */
+export const DEFAULT_AUTO_EMISSION = false
+
+/**
+ * 클릭 1회 = 버스트 1회.
+ * 버스트당 24개는 부하 측정 단위이지 시각적 단위가 아니라 클릭이 작아 보일 수 있다.
+ * 그래도 1로 둔 이유: 클릭을 N배로 부풀리면 "클릭 100번 = 버스트 100회"라는
+ * 계기(클릭 발사 누적)와 stats.burstsRequested의 1:1 대응이 깨진다.
+ * 더 크게 보이고 싶으면 EffectStyle(sizeStart, speed)을 만지는 것이 맞는 자리다.
+ */
+export const CLICK_BURST_COUNT = 1

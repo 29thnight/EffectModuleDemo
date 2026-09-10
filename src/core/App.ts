@@ -1,4 +1,4 @@
-import { Vector2, Vector3, type WebGLRenderer } from 'three'
+import { Vector2, type WebGLRenderer } from 'three'
 
 import { DEFAULT_LOAD_INDEX, LOAD_STEPS } from '../bench/constants'
 import { FrameSampler, type SamplerSnapshot } from '../bench/FrameSampler'
@@ -11,25 +11,19 @@ import {
 } from '../bench/LoadSweep'
 import { DEFAULT_EFFECT_CONFIG, DEFAULT_EFFECT_STYLE } from '../effects/constants'
 import { ImpactBurst } from '../effects/ImpactBurst'
-import type {
-  EffectModule,
-  EmitPoint,
-  ImpactBurstConfig,
-  OverflowPolicy,
-} from '../effects/types'
+import type { EffectModule, ImpactBurstConfig, OverflowPolicy } from '../effects/types'
 import { IndoorScene } from '../scenes/IndoorScene'
 import { OutdoorScene } from '../scenes/OutdoorScene'
 
 import { type AppCallbacks, withCallbackDefaults } from './callbacks'
 import {
-  BEHIND_CAMERA_DISTANCE,
   DT_SPIKE_INJECTION_SECONDS,
   DT_SPIKE_LOG_THRESHOLD_SECONDS,
   MAX_DT_SECONDS,
   POOL_EXHAUST_TARGET,
   UI_REFRESH_SECONDS,
 } from './constants'
-import { EmissionScheduler } from './EmissionScheduler'
+import { Emission } from './Emission'
 import { exerciseDisposedModule } from './probes'
 import { applyRendererProfile, applyViewport, createRenderer } from './renderer'
 import { TelemetryRecorder } from './Telemetry'
@@ -54,15 +48,10 @@ export class App implements SweepHost {
   private effects: EffectModule
   private effectConfig: ImpactBurstConfig
 
-  private readonly scheduler = new EmissionScheduler()
+  private readonly emission: Emission
   private readonly sampler = new FrameSampler()
   private readonly sweep: LoadSweep
 
-  private readonly emitPoint: EmitPoint = {
-    position: new Vector3(),
-    direction: new Vector3(0, 1, 0),
-  }
-  private readonly cameraForward = new Vector3()
   private readonly drawingBuffer = new Vector2()
   private readonly recorder: TelemetryRecorder
 
@@ -74,7 +63,6 @@ export class App implements SweepHost {
   private targetConcurrent = LOAD_STEPS[DEFAULT_LOAD_INDEX]
   private pixelRatioOverride: number | null = null
   private lastDevicePixelRatio = 1
-  private emitBehindCamera = false
   private totalDrawCalls = 0
   private peakRawDt = 0
 
@@ -91,13 +79,15 @@ export class App implements SweepHost {
     this.effects = new ImpactBurst(this.effectConfig, this.active.effectStyle)
     this.active.attachEffects(this.effects.object3D)
 
+    // 발사 경로(자동 스케줄 / 클릭 레이캐스트)는 Emission이 갖는다. App은 매 프레임 tick()만 부른다.
+    this.emission = new Emission(canvas, {
+      activeScene: () => this.active,
+      effects: () => this.effects,
+      onLog: (message) => this.callbacks.onLog(message),
+      onChanged: () => this.publishTelemetry(),
+    })
     this.sweep = new LoadSweep(this)
-    this.recorder = new TelemetryRecorder(
-      this.active.id,
-      this.active.label,
-      this.effectConfig.capacity,
-      this.effectConfig.overflow,
-    )
+    this.recorder = new TelemetryRecorder(this.effectConfig.capacity, this.effectConfig.overflow)
 
     applyRendererProfile(this.renderer, this.active.rendererProfile)
     this.syncScheduler()
@@ -114,10 +104,14 @@ export class App implements SweepHost {
   }
 
   dispose(): void {
+    // 진행 중인 스윕부터 끝낸다. 루프가 멈추면 tick()이 더 오지 않아 run()의 Promise가
+    // 영원히 대기 상태로 남고, 호출자의 finally(버튼 복구 등)도 실행되지 않는다.
+    this.sweep.cancel()
     if (this.rafId !== 0) cancelAnimationFrame(this.rafId)
     this.rafId = 0
     window.removeEventListener('resize', this.handleResize)
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost)
+    this.emission.dispose()
 
     // 이펙트는 하네스 소유물이므로 하네스가 회수한다. 씬은 자기 것만 회수한다.
     this.effects.dispose()
@@ -171,16 +165,23 @@ export class App implements SweepHost {
   }
 
   setEmitBehindCamera(enabled: boolean): void {
-    this.emitBehindCamera = enabled
-    this.callbacks.onLog(
-      enabled
-        ? `발사 지점을 카메라 뒤 ${BEHIND_CAMERA_DISTANCE}m로 강제합니다 (절두체 밖 발생).`
-        : '발사 지점을 씬 기본값으로 되돌립니다.',
-    )
+    this.emission.setBehindCamera(enabled)
   }
 
-  runSweep(): Promise<SweepReport> {
-    return this.sweep.run()
+  /** 자동 발사(부하 생성기). 꺼도 클릭 발사는 남는다. */
+  setAutoEmission(enabled: boolean): void {
+    this.emission.setAuto(enabled)
+    this.publishTelemetry()
+  }
+
+  /** 스윕은 자동 발사가 전제다. 사용자가 꺼 둔 상태였다면 끝난 뒤 되돌린다. */
+  async runSweep(): Promise<SweepReport> {
+    const restoreAuto = this.emission.forceAuto()
+    try {
+      return await this.sweep.run()
+    } finally {
+      restoreAuto()
+    }
   }
 
   runProbe(kind: ProbeKind): void {
@@ -192,6 +193,7 @@ export class App implements SweepHost {
         )
         break
       case 'pool-exhaust':
+        this.emission.setAuto(true)
         this.setConcurrentTarget(POOL_EXHAUST_TARGET)
         this.callbacks.onLog(
           `동시 목표를 ${POOL_EXHAUST_TARGET.toLocaleString()}개로 올립니다 (용량 ${this.effectConfig.capacity.toLocaleString()}개 초과).`,
@@ -214,7 +216,7 @@ export class App implements SweepHost {
   // -- SweepHost 구현 ----------------------------------------------------------
 
   getBurstsPerSecond(): number {
-    return this.scheduler.getBurstsPerSecond()
+    return this.emission.burstsPerSecond
   }
 
   resetSamplers(): void {
@@ -274,7 +276,7 @@ export class App implements SweepHost {
     this.active.update(dt, this.elapsed)
     // 호출 순서 계약: burst -> update -> render.
     // ImpactBurst.update()가 이번 프레임에 생성된 슬롯까지 업로드 구간에 넣기 때문이다.
-    this.scheduler.tick(dt, this.emitOnce)
+    this.emission.tick(dt)
     this.effects.update(dt)
     this.renderer.render(this.active.scene, this.active.camera)
 
@@ -299,17 +301,6 @@ export class App implements SweepHost {
       this.uiAccumulator = 0
       this.publishTelemetry()
     }
-  }
-
-  private readonly emitOnce = (): void => {
-    const point = this.active.getEmitPoint(this.emitPoint)
-    if (this.emitBehindCamera) {
-      this.active.camera.getWorldDirection(this.cameraForward)
-      point.position
-        .copy(this.active.camera.position)
-        .addScaledVector(this.cameraForward, -BEHIND_CAMERA_DISTANCE)
-    }
-    this.effects.burst(point)
   }
 
   private readonly handleResize = (): void => {
@@ -341,7 +332,7 @@ export class App implements SweepHost {
   }
 
   private syncScheduler(): void {
-    this.scheduler.setTarget(
+    this.emission.setTarget(
       this.targetConcurrent,
       this.activeLifetime(),
       this.effectConfig.particlesPerBurst,
@@ -372,7 +363,7 @@ export class App implements SweepHost {
   }
 
   private probeDisposeThenCall(): void {
-    this.callbacks.onLog(exerciseDisposedModule(this.effects, this.emitPoint))
+    this.callbacks.onLog(exerciseDisposedModule(this.effects, this.emission.probePoint))
     // 데모를 계속 쓸 수 있도록 새 인스턴스로 갈아끼운다.
     this.effects = new ImpactBurst(this.effectConfig, this.active.effectStyle)
     this.active.attachEffects(this.effects.object3D)
@@ -383,17 +374,17 @@ export class App implements SweepHost {
   private publishTelemetry(): void {
     this.callbacks.onTelemetry(
       this.recorder.update({
-        sceneId: this.active.id,
-        sceneLabel: this.active.label,
         snapshot: this.sampler.snapshot(),
         stats: this.effects.stats,
-        targetConcurrent: this.scheduler.getTargetConcurrent(),
-        burstsPerSecond: this.scheduler.getBurstsPerSecond(),
+        targetConcurrent: this.emission.targetConcurrent,
+        burstsPerSecond: this.emission.burstsPerSecond,
+        autoEmission: this.emission.isAutoEnabled,
+        clickBursts: this.emission.clickBursts,
         overflow: this.effectConfig.overflow,
         totalDrawCalls: this.totalDrawCalls,
         pixelRatio: this.renderer.getPixelRatio(),
         peakRawDtSeconds: this.peakRawDt,
-        emitBehindCamera: this.emitBehindCamera,
+        emitBehindCamera: this.emission.isBehindCamera,
       }),
     )
   }

@@ -67,8 +67,4 @@ export class EmissionScheduler {
 
     return fired
   }
-
-  reset(): void {
-    this.accumulator = 0
-  }
 }

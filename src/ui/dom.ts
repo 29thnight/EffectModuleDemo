@@ -29,6 +29,12 @@ export function button(label: string, onClick: () => void): HTMLButtonElement {
   return node
 }
 
+/** 라벨 요소와 그 안의 input. 하네스가 상태를 바꾸거나 잠글 때 input에 직접 손대야 한다. */
+export interface InputParts {
+  readonly root: HTMLLabelElement
+  readonly input: HTMLInputElement
+}
+
 /** 라디오 하나. 같은 name을 공유하면 브라우저가 배타 선택을 알아서 해준다. */
 export function radio(
   name: string,
@@ -36,24 +42,27 @@ export function radio(
   label: string,
   checked: boolean,
   onSelect: (value: string) => void,
-): HTMLLabelElement {
+): InputParts {
   const input = el('input', { type: 'radio', name, value })
   input.checked = checked
   input.addEventListener('change', () => {
     if (input.checked) onSelect(value)
   })
-  return el('label', {}, [input, ' ', label])
+  return { root: el('label', {}, [input, ' ', label]), input }
 }
 
+export type CheckboxParts = InputParts
+
+/** input을 같이 돌려주는 이유: 하네스가 상태를 바꿨을 때(스윕이 자동 발사를 강제) 체크 표시를 따라오게 해야 한다. */
 export function checkbox(
   label: string,
   checked: boolean,
   onChange: (checked: boolean) => void,
-): HTMLLabelElement {
+): CheckboxParts {
   const input = el('input', { type: 'checkbox' })
   input.checked = checked
   input.addEventListener('change', () => onChange(input.checked))
-  return el('label', {}, [input, ' ', label])
+  return { root: el('label', {}, [input, ' ', label]), input }
 }
 
 export function select(

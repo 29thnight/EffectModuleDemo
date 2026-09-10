@@ -58,9 +58,6 @@ export interface SceneModule {
  * (반대로 core는 ui를 import 하지 않는다. 의존 방향은 ui -> core 한쪽뿐이다.)
  */
 export interface FrameTelemetry {
-  readonly sceneId: SceneId
-  readonly sceneLabel: string
-
   /** rAF 콜백 간격 기준. vsync 대기와 GPU 시간이 전부 들어간 "진짜 프레임 타임". */
   readonly frameAvgMs: number
   readonly frameP95Ms: number
@@ -97,6 +94,10 @@ export interface FrameTelemetry {
   readonly maxClampedDtMs: number
   readonly effectDisposed: boolean
   readonly emitBehindCamera: boolean
+  /** 자동 발사(부하 생성기)가 켜져 있는가. 꺼져 있어도 클릭 발사는 된다. */
+  readonly autoEmission: boolean
+  /** 클릭으로 발사한 버스트 누적. 인터랙션이 실제로 모듈까지 닿았다는 증거. */
+  readonly clickBursts: number
 }
 
 /** 하네스가 노출하는 조작 표면. main.ts가 이걸 DebugPanel에 배선한다. */
